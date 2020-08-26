@@ -29,6 +29,8 @@ from simplegmail.labels import Label
 from simplegmail.message import Message
 from simplegmail.attachment import Attachment
 
+import structlog
+log = structlog.get_logger()
 
 class Gmail(object):
     """
@@ -381,11 +383,22 @@ class Gmail(object):
             List[Message]: a list of message objects.
             
         """
-        
+
+        log.msg("greeted", whom="world", more_than_a_string=[1, 2, 3])
+
         if label_ids is None:
             label_ids = []
 
         label_ids = [lbl.id for lbl in label_ids]
+
+        cnt_batches = 0
+
+        def _extend(message_refs): 
+            message_refs.extend(response['messages'])
+            nonlocal cnt_batches
+            cnt_batches += 1
+            print(f"\rFetched {len(message_refs)} emails in {cnt_batches} batches thus far.", end="")
+            return message_refs
 
         try:
             response = self.service.users().messages().list(
@@ -396,7 +409,7 @@ class Gmail(object):
 
             message_refs = []
             if 'messages' in response:  # ensure request was successful
-                message_refs.extend(response['messages'])
+                _extend(message_refs)
 
             while 'nextPageToken' in response:
                 page_token = response['nextPageToken']
@@ -407,7 +420,7 @@ class Gmail(object):
                     pageToken=page_token
                 ).execute()
 
-                message_refs.extend(response['messages'])
+                _extend(message_refs)
 
             return self._get_messages_from_refs(user_id, message_refs,
                                                 attachments)
